@@ -106,7 +106,10 @@ class MSA_processing:
 
         # Connect local sequence index with uniprot index (index shift inferred from 1st row of MSA)
         focus_loc = self.focus_seq_name.split("/")[-1]
-        start,stop = focus_loc.split("-")
+        if "-" in focus_loc:
+            start,stop = focus_loc.split("-")
+        else:
+            start,stop = 1, len(self.focus_seq)
         self.focus_start_loc = int(start)
         self.focus_stop_loc = int(stop)
         self.uniprot_focus_col_to_wt_aa_dict \
