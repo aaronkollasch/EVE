@@ -1,9 +1,6 @@
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-import os
-import torch
-import tqdm
 
 class MSA_processing:
     def __init__(self,
