@@ -13,6 +13,7 @@ if __name__=='__main__':
     parser.add_argument('--protein_index', type=int, help='Row index of protein in input mapping file')
     parser.add_argument('--MSA_weights_location', type=str, help='Location where weights for each sequence in the MSA will be stored')
     parser.add_argument('--theta_reweighting', type=float, help='Parameters for MSA sequence re-weighting')
+    parser.add_argument('--no_filter_columns', action='store_true', help='Do not filter columns by gap fraction')
     parser.add_argument('--VAE_checkpoint_location', type=str, help='Location where VAE model checkpoints will be stored')
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name will be the protein name followed by this suffix')
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
@@ -39,7 +40,8 @@ if __name__=='__main__':
             MSA_location=msa_location,
             theta=theta,
             use_weights=True,
-            weights_location=args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy'
+            weights_location=args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy',
+            threshold_focus_cols_frac_gaps=1.0 if args.no_filter_columns else 0.3,
     )
 
     model_name = protein_name + "_" + args.model_name_suffix
