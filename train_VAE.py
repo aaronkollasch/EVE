@@ -1,7 +1,9 @@
 import os, sys
+import glob
 import argparse
 import pandas as pd
 import json
+import torch
 
 from EVE import VAE_model
 from utils import data_utils
@@ -19,6 +21,7 @@ if __name__=='__main__':
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--save_inprogress', action='store_true', help='Save and restore from in-progress model checkpoints')
     args = parser.parse_args()
 
     mapping_file = pd.read_csv(args.MSA_list)
@@ -32,7 +35,7 @@ if __name__=='__main__':
     else:
         try:
             theta = float(mapping_file['theta'][args.protein_index])
-        except:
+        except (ValueError, KeyError):
             theta = 0.2
     print("Theta MSA re-weighting: "+str(theta))
 
@@ -49,6 +52,16 @@ if __name__=='__main__':
 
     model_params = json.load(open(args.model_parameters_location))
 
+    if args.save_inprogress:
+        os.makedirs("_inprogress", exist_ok=True)
+        model_params["training_parameters"]["save_model_params_freq"] = model_params["training_parameters"]["num_training_steps"] // 100
+        model_params["training_parameters"]["model_inprogress_checkpoint_location"] = "_inprogress"
+        old_checkpoints = glob.glob(model_params["training_parameters"]['model_inprogress_checkpoint_location']+os.sep+model_name+"_step_*")
+        if len(old_checkpoints) > 0:
+            args.seed += int(old_checkpoints[0].split("_")[-1])
+    else:
+        old_checkpoints = []
+
     model = VAE_model.VAE_model(
                     model_name=model_name,
                     data=data,
@@ -57,6 +70,16 @@ if __name__=='__main__':
                     random_seed=args.seed
     )
     model = model.to(model.device)
+
+    if len(old_checkpoints) > 0:
+        checkpoint_name = max(old_checkpoints, key=lambda x: int(x.split("_")[-1]))
+        try:
+            checkpoint = torch.load(checkpoint_name)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
+        except:
+            print("Unable to locate VAE model checkpoint")
+            sys.exit(0)
 
     model_params["training_parameters"]['training_logs_location'] = args.training_logs_location
     model_params["training_parameters"]['model_checkpoint_location'] = args.VAE_checkpoint_location
