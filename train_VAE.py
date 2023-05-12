@@ -73,6 +73,7 @@ if __name__=='__main__':
 
     if len(old_checkpoints) > 0:
         checkpoint_name = max(old_checkpoints, key=lambda x: int(x.split("_")[-1]))
+        first_step = int(checkpoint_name.split("_")[-1])
         try:
             checkpoint = torch.load(checkpoint_name)
             model.load_state_dict(checkpoint['model_state_dict'])
@@ -80,12 +81,14 @@ if __name__=='__main__':
         except:
             print("Unable to locate VAE model checkpoint")
             sys.exit(0)
+    else:
+        first_step = 0
 
     model_params["training_parameters"]['training_logs_location'] = args.training_logs_location
     model_params["training_parameters"]['model_checkpoint_location'] = args.VAE_checkpoint_location
 
     print("Starting to train model: " + model_name)
-    model.train_model(data=data, training_parameters=model_params["training_parameters"])
+    model.train_model(data=data, training_parameters=model_params["training_parameters"], first_step=first_step)
 
     print("Saving model: " + model_name)
     model.save(model_checkpoint=model_params["training_parameters"]['model_checkpoint_location']+os.sep+model_name+"_final", 
