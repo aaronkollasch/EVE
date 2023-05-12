@@ -209,7 +209,13 @@ class VAE_model(nn.Module):
         start = time.time()
         train_loss = 0
         
-        for training_step in tqdm.tqdm(range(first_step+1,training_parameters['num_training_steps']+1), desc="Training model"):
+        for training_step in tqdm.trange(
+                first_step+1,
+                training_parameters['num_training_steps']+1,
+                initial=first_step+1,
+                total=training_parameters['num_training_steps'],
+                desc="Training model"
+        ):
 
             batch_index = np.random.choice(batch_order, training_parameters['batch_size'], p=seq_sample_probs).tolist()
             x = torch.tensor(x_train[batch_index], dtype=self.dtype).to(self.device)
