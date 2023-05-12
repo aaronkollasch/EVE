@@ -53,9 +53,9 @@ if __name__=='__main__':
     model_params = json.load(open(args.model_parameters_location))
 
     if args.save_inprogress:
-        os.makedirs("_inprogress", exist_ok=True)
         model_params["training_parameters"]["save_model_params_freq"] = model_params["training_parameters"]["num_training_steps"] // 100
         model_params["training_parameters"]["model_inprogress_checkpoint_location"] = "_inprogress"
+        os.makedirs(model_params["training_parameters"]["model_inprogress_checkpoint_location"], exist_ok=True)
         old_checkpoints = glob.glob(model_params["training_parameters"]['model_inprogress_checkpoint_location']+os.sep+model_name+"_step_*")
         if len(old_checkpoints) > 0:
             args.seed += int(old_checkpoints[0].split("_")[-1])
@@ -96,3 +96,7 @@ if __name__=='__main__':
                 decoder_parameters=model_params["decoder_parameters"], 
                 training_parameters=model_params["training_parameters"]
     )
+    if args.save_inprogress:
+        old_checkpoints = glob.glob(model_params["training_parameters"]['model_inprogress_checkpoint_location']+os.sep+model_name+"_step_*")
+        for checkpoint_name in old_checkpoints:
+            os.remove(checkpoint_name)
