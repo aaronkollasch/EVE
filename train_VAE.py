@@ -6,7 +6,7 @@ import json
 import torch
 
 from EVE import VAE_model
-from utils import data_utils
+from utils import data_utils, aws_utils
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='VAE')
@@ -22,6 +22,8 @@ if __name__=='__main__':
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--save_inprogress', action='store_true', help='Save and restore from in-progress model checkpoints')
+    parser.add_argument("--s3-path", type=str, default='', help="Base s3:// path (leave blank to disable syncing).")
+    parser.add_argument("--s3-project", type=str, default='default', metavar='P', help="Project name (subfolder of s3-path).")
     args = parser.parse_args()
 
     mapping_file = pd.read_csv(args.MSA_list)
@@ -39,6 +41,7 @@ if __name__=='__main__':
             theta = 0.2
     print("Theta MSA re-weighting: "+str(theta))
 
+    aws_util = aws_utils.AWSUtility(s3_base_path=args.s3_path, s3_project=args.s3_project) if args.s3_path else None
     data = data_utils.MSA_processing(
             MSA_location=msa_location,
             theta=theta,
@@ -56,6 +59,12 @@ if __name__=='__main__':
         model_params["training_parameters"]["save_model_params_freq"] = model_params["training_parameters"]["num_training_steps"] // 100
         model_params["training_parameters"]["model_inprogress_checkpoint_location"] = "_inprogress"
         os.makedirs(model_params["training_parameters"]["model_inprogress_checkpoint_location"], exist_ok=True)
+        if aws_util is not None:
+            aws_util.s3_get_file_grep(
+                s3_folder=model_params["training_parameters"]["model_inprogress_checkpoint_location"],
+                dest_folder=model_params["training_parameters"]["model_inprogress_checkpoint_location"],
+                search_pattern=model_name+"_step_.*",
+            )
         old_checkpoints = glob.glob(model_params["training_parameters"]['model_inprogress_checkpoint_location']+os.sep+model_name+"_step_*")
         if len(old_checkpoints) > 0:
             args.seed += int(old_checkpoints[0].split("_")[-1])
