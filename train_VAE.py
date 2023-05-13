@@ -84,8 +84,9 @@ if __name__=='__main__':
         checkpoint_name = max(old_checkpoints, key=lambda x: int(x.split("_")[-1]))
         first_step = int(checkpoint_name.split("_")[-1])
         try:
-            checkpoint = torch.load(checkpoint_name)
+            checkpoint = torch.load(checkpoint_name, map_location=model.device)
             model.load_state_dict(checkpoint['model_state_dict'])
+            del checkpoint
             print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
         except:
             print("Unable to locate VAE model checkpoint")
