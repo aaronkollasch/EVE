@@ -4,6 +4,7 @@ import argparse
 import pandas as pd
 import json
 import torch
+import torch.optim as optim
 
 from EVE import VAE_model
 from utils import data_utils, aws_utils
@@ -79,6 +80,19 @@ if __name__=='__main__':
                     random_seed=args.seed
     )
     model = model.to(model.device)
+    optimizer = optim.Adam(
+        model.parameters(),
+        lr=model_params['training_parameters']['learning_rate'],
+        weight_decay = model_params['training_parameters']['l2_regularization'],
+    )
+    if model_params['training_parameters']['use_lr_scheduler']:
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=model_params['training_parameters']['lr_scheduler_step_size'],
+            gamma=model_params['training_parameters']['lr_scheduler_gamma'],
+        )
+    else:
+        scheduler = None
 
     if len(old_checkpoints) > 0:
         checkpoint_name = max(old_checkpoints, key=lambda x: int(x.split("_")[-1]))
@@ -86,6 +100,9 @@ if __name__=='__main__':
         try:
             checkpoint = torch.load(checkpoint_name, map_location=model.device)
             model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if scheduler is not None:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             del checkpoint
             print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
         except:
@@ -98,7 +115,13 @@ if __name__=='__main__':
     model_params["training_parameters"]['model_checkpoint_location'] = args.VAE_checkpoint_location
 
     print("Starting to train model: " + model_name)
-    model.train_model(data=data, training_parameters=model_params["training_parameters"], first_step=first_step)
+    model.train_model(
+        data=data,
+        training_parameters=model_params["training_parameters"],
+        first_step=first_step,
+        optimizer=optimizer,
+        scheduler=scheduler,
+    )
 
     print("Saving model: " + model_name)
     model.save(model_checkpoint=model_params["training_parameters"]['model_checkpoint_location']+os.sep+model_name+"_final", 

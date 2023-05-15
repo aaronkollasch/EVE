@@ -166,7 +166,7 @@ class VAE_model(nn.Module):
 
         return ELBO_batch_tensor, BCE_batch_tensor, KLD_batch_tensor
 
-    def train_model(self, data, training_parameters, first_step=0):
+    def train_model(self, data, training_parameters, first_step=0, optimizer=None, scheduler=None):
         """
         Training procedure for the VAE model.
         If use_validation_set is True then:
@@ -185,9 +185,10 @@ class VAE_model(nn.Module):
                 logs.write("Neff:\t"+str(self.Neff)+"\n")
                 logs.write("Alignment sequence length:\t"+str(data.seq_len)+"\n")
 
-        optimizer = optim.Adam(self.parameters(), lr=training_parameters['learning_rate'], weight_decay = training_parameters['l2_regularization'])
+        if optimizer is None:
+            optimizer = optim.Adam(self.parameters(), lr=training_parameters['learning_rate'], weight_decay = training_parameters['l2_regularization'])
         
-        if training_parameters['use_lr_scheduler']:
+        if scheduler is None and training_parameters['use_lr_scheduler']:
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=training_parameters['lr_scheduler_step_size'], gamma=training_parameters['lr_scheduler_gamma'])
 
         if training_parameters['use_validation_set']:
@@ -247,10 +248,14 @@ class VAE_model(nn.Module):
                     checkpoint_location = training_parameters['model_inprogress_checkpoint_location']+os.sep+self.model_name+"_step_"+str(training_step)
                 else:
                     checkpoint_location = training_parameters['model_checkpoint_location']+os.sep+self.model_name+"_step_"+str(training_step)
-                self.save(model_checkpoint=checkpoint_location,
-                            encoder_parameters=self.encoder_parameters,
-                            decoder_parameters=self.decoder_parameters,
-                            training_parameters=training_parameters)
+                self.save(
+                    model_checkpoint=checkpoint_location,
+                    encoder_parameters=self.encoder_parameters,
+                    decoder_parameters=self.decoder_parameters,
+                    optimizer_state_dict=optimizer.state_dict(),
+                    scheduler_state_dict=scheduler.state_dict() if training_parameters['use_lr_scheduler'] else None,
+                    training_parameters=training_parameters
+                )
                 if 'model_inprogress_checkpoint_location' in training_parameters:
                     for checkpoint in old_checkpoints:
                         os.remove(checkpoint)
@@ -292,11 +297,22 @@ class VAE_model(nn.Module):
         return neg_ELBO.item(), BCE.item(), KLD_latent.item(), KLD_global_parameters.item()
         
 
-    def save(self, model_checkpoint, encoder_parameters, decoder_parameters, training_parameters, batch_size=256):
+    def save(
+        self,
+        model_checkpoint,
+        encoder_parameters,
+        decoder_parameters,
+        training_parameters,
+        optimizer_state_dict=None,
+        scheduler_state_dict=None,
+        batch_size=256
+    ):
         torch.save({
             'model_state_dict':self.state_dict(),
             'encoder_parameters':encoder_parameters,
             'decoder_parameters':decoder_parameters,
+            'optimizer_state_dict':optimizer_state_dict,
+            'scheduler_state_dict':scheduler_state_dict,
             'training_parameters':training_parameters,
             }, model_checkpoint)
     
