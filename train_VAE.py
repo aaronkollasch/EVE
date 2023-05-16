@@ -1,8 +1,10 @@
-import os, sys
+import os
+import sys
 import glob
 import argparse
-import pandas as pd
 import json
+import traceback
+import pandas as pd
 import torch
 import torch.optim as optim
 
@@ -105,9 +107,10 @@ if __name__=='__main__':
                 scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             del checkpoint
             print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
-        except:
+        except Exception as e:
             print("Unable to locate VAE model checkpoint")
-            sys.exit(0)
+            traceback.print_exc()
+            sys.exit(1)
     else:
         first_step = 0
 
