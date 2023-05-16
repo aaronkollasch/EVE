@@ -97,19 +97,23 @@ if __name__=='__main__':
         scheduler = None
 
     if len(old_checkpoints) > 0:
-        checkpoint_name = max(old_checkpoints, key=lambda x: int(x.split("_")[-1]))
-        first_step = int(checkpoint_name.split("_")[-1])
-        try:
-            checkpoint = torch.load(checkpoint_name, map_location=model.device)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            if scheduler is not None:
-                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-            del checkpoint
-            print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
-        except Exception as e:
-            print("Unable to locate VAE model checkpoint")
-            traceback.print_exc()
+        for checkpoint_name in sorted(old_checkpoints, key=lambda x: int(x.split("_")[-1]), reverse=True):
+            print(f"Restoring from checkpoint: {checkpoint_name}")
+            try:
+                checkpoint = torch.load(checkpoint_name, map_location=model.device)
+                model.load_state_dict(checkpoint['model_state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                if scheduler is not None:
+                    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                first_step = int(checkpoint_name.split("_")[-1])
+                del checkpoint
+                print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
+                break
+            except Exception as e:
+                print("Unable to restore from checkpoint '{}'".format(checkpoint_name))
+                traceback.print_exc()
+        else:
+            print("Unable to restore from any checkpoint")
             sys.exit(1)
     else:
         first_step = 0
