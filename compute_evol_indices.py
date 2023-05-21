@@ -28,6 +28,7 @@ if __name__=='__main__':
     parser.add_argument('--output_evol_indices_filename_suffix', default='', type=str, help='(Optional) Suffix to be added to output filename')
     parser.add_argument('--num_samples_compute_evol_indices', type=int, help='Num of samples to approximate delta elbo when computing evol indices')
     parser.add_argument('--batch_size', default=256, type=int, help='Batch size when computing evol indices')
+    parser.add_argument('--save_inprogress', action='store_true', help='Save and restore from in-progress batch checkpoints')
     args = parser.parse_args()
 
     mapping_file = pd.read_csv(args.MSA_list)
@@ -82,19 +83,30 @@ if __name__=='__main__':
         print("Unable to restore from checkpoint '{}'".format(checkpoint_name))
         traceback.print_exc()
         sys.exit(1)
-    
-    list_valid_mutations, evol_indices, _, _ = model.compute_evol_indices(msa_data=data,
-                                                    list_mutations_location=args.mutations_location, 
-                                                    num_samples=args.num_samples_compute_evol_indices,
-                                                    batch_size=args.batch_size)
+
+    output_filename = protein_name+'_'+str(args.num_samples_compute_evol_indices)+'_samples'+args.output_evol_indices_filename_suffix
+    evol_indices_output_filename = args.output_evol_indices_location + os.sep + output_filename + ".csv"
+    save_inprogress_prefix = None
+    if args.save_inprogress:
+        save_inprogress_location = "_inprogress"
+        os.makedirs(save_inprogress_location, exist_ok=True)
+        save_inprogress_prefix = save_inprogress_location + os.sep + output_filename
+
+    list_valid_mutations, evol_indices, _, _ = model.compute_evol_indices(
+        msa_data=data,
+        list_mutations_location=args.mutations_location,
+        num_samples=args.num_samples_compute_evol_indices,
+        batch_size=args.batch_size,
+        save_inprogress=args.save_inprogress,
+        save_inprogress_prefix=save_inprogress_prefix,
+    )
 
     df = {}
     df['protein_name'] = protein_name
     df['mutations'] = list_valid_mutations
     df['evol_indices'] = evol_indices
     df = pd.DataFrame(df)
-    
-    evol_indices_output_filename = args.output_evol_indices_location+os.sep+protein_name+'_'+str(args.num_samples_compute_evol_indices)+'_samples'+args.output_evol_indices_filename_suffix+'.csv'
+
     try:
         keep_header = os.stat(evol_indices_output_filename).st_size == 0
     except:

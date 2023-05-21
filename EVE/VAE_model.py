@@ -1,5 +1,7 @@
 import os
+import sys
 import glob
+import traceback
 import numpy as np
 import pandas as pd
 import time
@@ -316,7 +318,15 @@ class VAE_model(nn.Module):
             'training_parameters':training_parameters,
             }, model_checkpoint)
     
-    def compute_evol_indices(self, msa_data, list_mutations_location, num_samples, batch_size=256):
+    def compute_evol_indices(
+        self,
+        msa_data,
+        list_mutations_location,
+        num_samples,
+        batch_size=256,
+        save_inprogress=False,
+        save_inprogress_prefix=None,
+    ):
         """
         The column in the list_mutations dataframe that contains the mutant(s) for a given variant should be called "mutations"
         """
@@ -358,12 +368,64 @@ class VAE_model(nn.Module):
         dataloader = torch.utils.data.DataLoader(mutated_sequences_one_hot, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
         prediction_matrix = torch.zeros((len(list_valid_mutations),num_samples))
 
+        last_i, last_j = -1, -1
+        if save_inprogress:
+            old_checkpoints = glob.glob(save_inprogress_prefix+"*")
+            for checkpoint_name in sorted(old_checkpoints, key=lambda x: int(x.split("_")[-1]), reverse=True):
+                try:
+                    print(f"Loading in-progress scores from file: {checkpoint_name}")
+                    inprogress_data = torch.load(checkpoint_name)
+                    assert inprogress_data["prediction_matrix"].shape == prediction_matrix.shape, "Prediction matrix shape does not match saved shape"
+                    prediction_matrix = inprogress_data["prediction_matrix"]
+                    last_i = inprogress_data["last_i"]
+                    last_j = inprogress_data["last_j"]
+                    assert batch_size == inprogress_data["batch_size"], f"Batch size {batch_size} does not match saved {inprogress_data['batch_size']}"
+                    assert (prediction_matrix[last_i*batch_size:(last_i+1)*batch_size, last_j] != 0).all(), "Last batch sample contains zero predictions"
+                    print(f"Loaded batch #: {last_i+1}, sample #: {last_j+1}")
+                    break
+                except Exception as e:
+                    print("Unable to restore from checkpoint '{}'".format(checkpoint_name))
+                    print(e)
+                    traceback.print_exc()
+            else:
+                if len(old_checkpoints) > 0:
+                    print("Unable to restore from any checkpoint")
+                    sys.exit(1)
+                else:
+                    print(f"No checkpoints found with prefix {save_inprogress_prefix}")
+
+            def save_inprogress_callback(i, j):
+                old_checkpoints = glob.glob(save_inprogress_prefix+"_*")
+                torch.save(
+                    {
+                        "prediction_matrix": prediction_matrix,
+                        "last_i": i,
+                        "last_j": j,
+                        "batch_size": batch_size,
+                    },
+                    save_inprogress_prefix + f"_{i*num_samples+j}",
+                )
+                for checkpoint in old_checkpoints:
+                    os.remove(checkpoint)
+
+        else:
+            def save_inprogress_callback(i, j):
+                pass
+
         with torch.no_grad():
+            last_save_time = time.time()
             for i, batch in enumerate(tqdm.tqdm(dataloader, 'Looping through mutation batches')):
+                if i < last_i:
+                    continue
                 x = batch.type(self.dtype).to(self.device)
                 for j in tqdm.tqdm(range(num_samples), 'Looping through number of samples for batch #: '+str(i+1)):
+                    if i == last_i and j <= last_j:
+                        continue
                     seq_predictions, _, _ = self.all_likelihood_components(x)
                     prediction_matrix[i*batch_size:i*batch_size+len(x),j] = seq_predictions
+                    if time.time() - last_save_time > 180:
+                        save_inprogress_callback(i, j)
+                        last_save_time = time.time()
                 tqdm.tqdm.write('\n')
             mean_predictions = prediction_matrix.mean(dim=1, keepdim=False)
             std_predictions = prediction_matrix.std(dim=1, keepdim=False)
