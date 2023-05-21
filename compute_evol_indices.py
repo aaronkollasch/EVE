@@ -1,6 +1,8 @@
-import os,sys
+import os
+import sys
 import json
 import argparse
+import traceback
 import pandas as pd
 import torch
 
@@ -69,14 +71,15 @@ if __name__=='__main__':
     )
     model = model.to(model.device)
 
+    checkpoint_name = str(args.VAE_checkpoint_location) + os.sep + model_name + "_final"
     try:
-        checkpoint_name = str(args.VAE_checkpoint_location) + os.sep + model_name + "_final"
         checkpoint = torch.load(checkpoint_name)
         model.load_state_dict(checkpoint['model_state_dict'])
         print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
-    except:
-        print("Unable to locate VAE model checkpoint")
-        sys.exit(0)
+    except Exception as e:
+        print("Unable to restore from checkpoint '{}'".format(checkpoint_name))
+        traceback.print_exc()
+        sys.exit(1)
     
     list_valid_mutations, evol_indices, _, _ = model.compute_evol_indices(msa_data=data,
                                                     list_mutations_location=args.mutations_location, 
