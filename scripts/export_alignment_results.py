@@ -7,16 +7,76 @@ import collections
 import pandas as pd
 from tqdm.auto import tqdm
 
-df = pd.read_table("missing_genes_with_priority.tsv")
-assert len(df["protein"].unique()) == len(df)
-prio_df = df[df['high_priority']]
 
-# mapping_df = prio_df[["protein"]].rename(columns={"protein": "protein_name"})
-# mapping_df["msa_location"] = mapping_df["protein_name"] + ".a2m"
-# mapping_df["theta"] = 0.2
-# mapping_df.to_csv(f"./{run_name}_mapping.csv", index=False)
-# subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-us-east-2/colabfold/output/popeve/"])
-# subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-private/eve/popeve/data/mappings/"])
+def s3_path_exists(path, silent=False):
+    max_runs = 3
+    run = 0
+    error = Exception()
+    while run < max_runs:
+        try:
+            return subprocess.run(
+                ["aws", "s3", "ls", path],
+                check=True,
+                stdout=subprocess.DEVNULL if silent else None,
+                stderr=subprocess.DEVNULL if silent else None,
+            )
+        except subprocess.CalledProcessError as e:
+            error = e
+            continue
+        else:
+            break
+        finally:
+            run += 1
+    else:
+        raise error
+
+
+def s3_cp_file(from_path, to_path, silent=False):
+    max_runs = 3
+    run = 0
+    error = Exception()
+    while run < max_runs:
+        try:
+            return subprocess.run(
+                ["aws", "s3", "cp", from_path, to_path],
+                check=True,
+                stdout=subprocess.DEVNULL if silent else None,
+                stderr=subprocess.DEVNULL if silent else None,
+            )
+        except subprocess.CalledProcessError as e:
+            error = e
+            continue
+        else:
+            break
+        finally:
+            run += 1
+    else:
+        raise error
+
+
+tier = 2
+
+if tier == 1:
+    s3_cp_file("s3://markslab-us-east-2/colabfold/output/popeve/missing_genes_with_priority.tsv", ".")
+    df = pd.read_table("missing_genes_with_priority.tsv")
+    assert len(df["protein"].unique()) == len(df)
+    prio_df = df[df['high_priority']]
+
+    run_names = [
+        # "popeve_priority_proteins_uniref30_2103",
+        # "popeve_priority_proteins_uniref30_2202",
+        # "popeve_priority_proteins_uniref30_2202_c25",
+        "popeve_priority_proteins_uniref30_2202_c40",
+        # "popeve_priority_proteins_uniref30_2202_c50",
+    ]
+if tier == 2:
+    s3_cp_file("s3://markslab-us-east-2/colabfold/output/popeve/missing_genes_with_priority.tsv", ".")
+    df = pd.read_table("missing_genes_with_priority.tsv")
+    assert len(df["protein"].unique()) == len(df)
+    prio_df = df[~df['high_priority']]
+    run_names = [
+        "popeve_tier2_proteins_uniref30_2202_c40",
+    ]
 
 def make_a2ms(run_name, tup):
     i, j, protein = tup
@@ -56,13 +116,7 @@ def make_a2ms(run_name, tup):
     os.remove(f"/tmp/{run_name}/{protein}.a3m")
     os.remove(f"/tmp/{run_name}/{protein}.a2m")
 
-for run_name in [
-#     "popeve_priority_proteins_uniref30_2103",
-    # "popeve_priority_proteins_uniref30_2202",
-    # "popeve_priority_proteins_uniref30_2202_c25",
-    "popeve_priority_proteins_uniref30_2202_c40",
-    # "popeve_priority_proteins_uniref30_2202_c50",
-]:
+for run_name in run_names:
     os.makedirs(f"/tmp/{run_name}", exist_ok=True)
 
     def get_run_files():
@@ -84,3 +138,11 @@ for run_name in [
         total=len(prio_df)
     )
     collections.deque(i, maxlen=0)
+
+    mapping_df = prio_df[["protein"]].rename(columns={"protein": "protein_name"})
+    mapping_df["msa_location"] = mapping_df["protein_name"] + ".a2m"
+    mapping_df["theta"] = 0.2
+    mapping_df.to_csv(f"./{run_name}_mapping.csv", index=False)
+    if not s3_path_exists(f"s3://markslab-private/eve/popeve/data/mappings/{run_name}_mapping.csv"):
+        subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-us-east-2/colabfold/output/popeve/"])
+        subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-private/eve/popeve/data/mappings/"])

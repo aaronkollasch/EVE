@@ -39,10 +39,29 @@ def s3_cp_file(from_path, to_path, silent=False):
     else:
         raise error
 
-s3_cp_file("s3://markslab-us-east-2/colabfold/output/popeve/missing_genes_with_priority.tsv", ".")
-df = pd.read_table("missing_genes_with_priority.tsv")
-assert len(df["protein"].unique()) == len(df)
-prio_df = df[df['high_priority']]
+tier = 2
+
+if tier == 1:
+    s3_cp_file("s3://markslab-us-east-2/colabfold/output/popeve/missing_genes_with_priority.tsv", ".")
+    df = pd.read_table("missing_genes_with_priority.tsv")
+    assert len(df["protein"].unique()) == len(df)
+    prio_df = df[df['high_priority']]
+
+    run_names = [
+        # "popeve_priority_proteins_uniref30_2103",
+        # "popeve_priority_proteins_uniref30_2202",
+        # "popeve_priority_proteins_uniref30_2202_c25",
+        "popeve_priority_proteins_uniref30_2202_c40",
+        # "popeve_priority_proteins_uniref30_2202_c50",
+    ]
+if tier == 2:
+    s3_cp_file("s3://markslab-us-east-2/colabfold/output/popeve/missing_genes_with_priority.tsv", ".")
+    df = pd.read_table("missing_genes_with_priority.tsv")
+    assert len(df["protein"].unique()) == len(df)
+    prio_df = df[~df['high_priority']]
+    run_names = [
+        "popeve_tier2_proteins_uniref30_2202_c40",
+    ]
 
 os.makedirs("/tmp/aln_stats", exist_ok=True)
 
@@ -114,13 +133,7 @@ def get_aln_stats(run_name, dest_name, protein):
     print(protein)
     return result
 
-for run_name in [
-#     "popeve_priority_proteins_uniref30_2103",
-#     "popeve_priority_proteins_uniref30_2202",
-#     "popeve_priority_proteins_uniref30_2202_c50",
-#     "popeve_priority_proteins_uniref30_2202_c25",
-    "popeve_priority_proteins_uniref30_2202_c40",
-]:
+for run_name in run_names:
     dest_name = run_name + "_m0"
     result = process_map(
         partial(get_aln_stats, run_name, dest_name),
