@@ -8,28 +8,18 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 
-def s3_path_exists(path, silent=False):
-    max_runs = 3
-    run = 0
-    error = Exception()
-    while run < max_runs:
-        try:
-            return subprocess.run(
-                ["aws", "s3", "ls", path],
-                check=True,
-                stdout=subprocess.DEVNULL if silent else None,
-                stderr=subprocess.DEVNULL if silent else None,
-            )
-        except subprocess.CalledProcessError as e:
-            error = e
-            continue
-        else:
-            break
-        finally:
-            run += 1
+def s3_path_exists(bucket, key, silent=False):
+    result = subprocess.run(
+        ["aws", "s3api", "head-object", "--bucket", bucket, "--key", key],
+        stdout=subprocess.DEVNULL if silent else None,
+        stderr=subprocess.DEVNULL if silent else None,
+    )
+    if result.returncode == 0:
+        return True
+    elif result.returncode == 255:
+        return False
     else:
-        raise error
-
+        raise Exception(result.returncode, result.stderr)
 
 def s3_cp_file(from_path, to_path, silent=False):
     max_runs = 3
@@ -143,6 +133,6 @@ for run_name in run_names:
     mapping_df["msa_location"] = mapping_df["protein_name"] + ".a2m"
     mapping_df["theta"] = 0.2
     mapping_df.to_csv(f"./{run_name}_mapping.csv", index=False)
-    if not s3_path_exists(f"s3://markslab-private/eve/popeve/data/mappings/{run_name}_mapping.csv"):
+    if not s3_path_exists("markslab-private", f"eve/popeve/data/mappings/{run_name}_mapping.csv"):
         subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-us-east-2/colabfold/output/popeve/"])
         subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-private/eve/popeve/data/mappings/"])
