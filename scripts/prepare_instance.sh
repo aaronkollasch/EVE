@@ -12,7 +12,7 @@ bash "Mambaforge-$(uname)-$(uname -m).sh" -b
 ~/mambaforge/bin/conda init
 source ~/.bashrc
 
-mamba create -y -n py310 python=3.10 tqdm pandas numpy numba
+mamba create -y -n py310 python=3.10 tqdm pandas numpy numba biopython
 conda activate py310
 
 git clone https://github.com/aaronkollasch/EVE
