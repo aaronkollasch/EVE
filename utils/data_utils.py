@@ -1,6 +1,64 @@
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+from .weights import calc_weights_evcouplings
+
+# constants (copied from EVCouplings)
+GAP = "-"
+MATCH_GAP = GAP
+INSERT_GAP = "."
+
+ALPHABET_PROTEIN_NOGAP = "ACDEFGHIKLMNPQRSTVWY"
+ALPHABET_PROTEIN_GAP = GAP + ALPHABET_PROTEIN_NOGAP
+
+# Copied from EVCouplings
+def map_from_alphabet(alphabet, default):
+    """
+    Creates a mapping dictionary from a given alphabet.
+    Parameters
+    ----------
+    alphabet : str
+        Alphabet for remapping. Elements will
+        be remapped according to alphabet starting
+        from 0
+    default : Elements in matrix that are not
+        contained in alphabet will be treated as
+        this character
+    Raises
+    ------
+    ValueError
+        For invalid default character
+    """
+    map_ = {
+        c: i for i, c in enumerate(alphabet)
+    }
+
+    try:
+        default = map_[default]
+    except KeyError:
+        raise ValueError(
+            "Default {} is not in alphabet {}".format(default, alphabet)
+        )
+
+    return defaultdict(lambda: default, map_)
+
+# Copied from EVCouplings
+def map_matrix(matrix, map_):
+    """
+    Map elements in a numpy array using alphabet
+    Parameters
+    ----------
+    matrix : np.array
+        Matrix that should be remapped
+    map_ : defaultdict
+        Map that will be applied to matrix elements
+    Returns
+    -------
+    np.array
+        Remapped matrix
+    """
+    return np.vectorize(map_.__getitem__)(matrix)
+
 
 class MSA_processing:
     def __init__(self,
@@ -11,7 +69,8 @@ class MSA_processing:
         preprocess_MSA=True,
         threshold_sequence_frac_gaps=0.5,
         threshold_focus_cols_frac_gaps=0.3,
-        remove_sequences_with_indeterminate_AA_in_focus_cols=True
+        remove_sequences_with_indeterminate_AA_in_focus_cols=True,
+        num_cpus=1,
         ):
         
         """
@@ -33,6 +92,7 @@ class MSA_processing:
             - positions with a fraction of gap characters above threshold_focus_cols_pct_gaps will be set to lower case (and not included in the focus_cols)
             - default is set to 0.3 (i.e., focus positions are the ones with 30% of gaps or less, i.e., 70% or more residue occupancy)
         - remove_sequences_with_indeterminate_AA_in_focus_cols: (bool) Remove all sequences that have indeterminate AA (e.g., B, J, X, Z) at focus positions of the wild type
+        - num_cpus: (int) Number of CPUs/threads to use for weights calculation
         """
         np.random.seed(2021)
         self.MSA_location = MSA_location
@@ -44,6 +104,7 @@ class MSA_processing:
         self.threshold_sequence_frac_gaps = threshold_sequence_frac_gaps
         self.threshold_focus_cols_frac_gaps = threshold_focus_cols_frac_gaps
         self.remove_sequences_with_indeterminate_AA_in_focus_cols = remove_sequences_with_indeterminate_AA_in_focus_cols
+        self.num_cpus = num_cpus
 
         self.gen_alignment()
         self.create_all_singles()
@@ -148,17 +209,19 @@ class MSA_processing:
                 print("Loaded sequence weights from disk")
             except:
                 print ("Computing sequence weights")
-                list_seq = self.one_hot_encoding
-                list_seq = list_seq.reshape((list_seq.shape[0], list_seq.shape[1] * list_seq.shape[2]))
-                def compute_weight(seq):
-                    number_non_empty_positions = np.dot(seq,seq)
-                    if number_non_empty_positions>0:
-                        denom = np.dot(list_seq,seq) / np.dot(seq,seq) 
-                        denom = np.sum(denom > 1 - self.theta) 
-                        return 1/denom
-                    else:
-                        return 0.0 #return 0 weight if sequence is fully empty
-                self.weights = np.array(list(map(compute_weight,list_seq)))
+
+                alphabet_mapper = map_from_alphabet(ALPHABET_PROTEIN_GAP, default=GAP)
+                arrays = []
+                for seq in self.seq_name_to_sequence.values():
+                    arrays.append(np.array(list(seq)))
+                sequences = np.vstack(arrays)
+                sequences_mapped = map_matrix(sequences, alphabet_mapper)
+                self.weights = calc_weights_evcouplings(
+                    sequences_mapped,
+                    identity_threshold=1 - self.theta,
+                    empty_value=0,
+                    num_cpus=self.num_cpus
+                )  # GAP = 0
                 np.save(file=self.weights_location, arr=self.weights)
         else:
             # If not using weights, use an isotropic weight matrix
