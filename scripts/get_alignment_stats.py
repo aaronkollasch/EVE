@@ -39,7 +39,7 @@ def s3_cp_file(from_path, to_path, silent=False):
     else:
         raise error
 
-tier = 2
+tier = 6
 
 if tier == 1:
     s3_cp_file("s3://markslab-us-east-2/colabfold/output/popeve/missing_genes_with_priority.tsv", ".")
@@ -62,11 +62,47 @@ if tier == 2:
     run_names = [
         "popeve_tier2_proteins_uniref30_2202_c40",
     ]
+if tier == 3:
+    s3_cp_file("s3://markslab-private/eve/indels/data/mappings/clinvar_missing_invitae_variants_map.csv", ".")
+    df = pd.read_csv("clinvar_missing_invitae_variants_map.csv")
+    assert len(df["protein_name"].unique()) == len(df)
+    prio_df = df
+    run_names = [
+        "clinvar_indel_filter_significance_uniref30_2202_colabfold-default_c50",
+    ]
+if tier == 4:
+    s3_cp_file("s3://markslab-private/eve/indels/data/mappings/gnomad_missing_invitae_variants_map.csv", ".")
+    df = pd.read_csv("gnomad_missing_invitae_variants_map.csv")
+    assert len(df["protein_name"].unique()) == len(df)
+    prio_df = df
+    run_names = [
+        "gnomad_common_indels_uniref30_2202_colabfold-default_c50",
+    ]
+if tier == 5:
+    s3_cp_file("s3://markslab-private/eve/indels/data/mappings/dms_indels_map.csv", ".")
+    df = pd.read_csv("dms_indels_map.csv")
+    assert len(df["protein_name"].unique()) == len(df)
+    prio_df = df
+    run_names = [
+        "dms_indels_jackhmmer",
+    ]
+if tier == 6:
+    s3_cp_file("s3://markslab-private/eve/indels/data/mappings/missing_invitae_map.csv", ".")
+    df = pd.read_csv("missing_invitae_map.csv")
+    assert len(df["protein_name"].unique()) == len(df)
+    prio_df = df
+    run_names = [
+        "missing_invitae_uniref30_2202_colabfold-default_c50",
+    ]
 
 os.makedirs("/tmp/aln_stats", exist_ok=True)
 
 def get_aln_stats(run_name, dest_name, protein):
-    s3_cp_file(f"s3://markslab-private/eve/popeve/data/MSA/{run_name}/{protein}.a2m", f"/tmp/aln_stats/{protein}.a2m")
+    try:
+        s3_cp_file(f"s3://markslab-private/eve/indels/data/MSA/{run_name}/{protein}.a2m", f"/tmp/aln_stats/{protein}.a2m")
+    except subprocess.CalledProcessError:
+        print("skipping {protein}")
+        return
     theta = 0.2
     weights_fname = protein + '_theta_' + str(theta) + '.npy'
     weights_location = "/tmp/aln_stats" + os.sep + weights_fname
@@ -79,7 +115,7 @@ def get_aln_stats(run_name, dest_name, protein):
             result = subprocess.run(
                 [
                     "aws", "s3", "cp",
-                    f"s3://markslab-private/eve/popeve/data/weights/{dest_name}/{weights_fname}",
+                    f"s3://markslab-private/eve/indels/data/weights/{dest_name}/{weights_fname}",
                     weights_location,
                 ],
                 check=True,
@@ -101,21 +137,21 @@ def get_aln_stats(run_name, dest_name, protein):
     else:
         raise error
     if not weights_exist:
-        print(f"weights file s3://markslab-private/eve/popeve/data/weights/{dest_name}/{weights_fname} does not exist and will be created")
+        print(f"weights file s3://markslab-private/eve/indels/data/weights/{dest_name}/{weights_fname} does not exist and will be created")
     with suppress_stdout_stderr():
         msa = data_utils.MSA_processing(
             f"/tmp/aln_stats/{protein}.a2m",
             weights_location=weights_location,
             threshold_focus_cols_frac_gaps=1.0,
         )
-    assert msa.focus_seq_name.lstrip(">")  == protein
+    #assert msa.focus_seq_name.lstrip(">")  == protein
     num_seqs = 0
     with open(f"/tmp/aln_stats/{protein}.a2m") as f:
         for line in f:
             if line.startswith(">"):
                 num_seqs += 1
     if not weights_exist:
-        s3_cp_file(weights_location, f"s3://markslab-private/eve/popeve/data/weights/{dest_name}/")
+        s3_cp_file(weights_location, f"s3://markslab-private/eve/indels/data/weights/{dest_name}/")
     os.remove(f"/tmp/aln_stats/{protein}.a2m")
     os.remove(weights_location)
     result = {
@@ -137,13 +173,12 @@ for run_name in run_names:
     dest_name = run_name + "_m0"
     result = process_map(
         partial(get_aln_stats, run_name, dest_name),
-        (row.protein for row in prio_df.itertuples()),
-        max_workers=len(os.sched_getaffinity(0)),
+        (row.protein_name for row in prio_df.itertuples()),
+        max_workers=len(os.sched_getaffinity(0)) // 8,
         chunksize=10,
         total=len(prio_df),
     )
-    result_df = pd.DataFrame(result)
+    result_df = pd.DataFrame([r for r in result if r])
     # result_df.to_csv(f"{run_name}_aln_stats.csv", index=False)
     result_df.to_csv(f"{dest_name}_aln_stats.csv", index=False)
-    s3_cp_file(f"./{dest_name}_aln_stats.csv", "s3://markslab-us-east-2/colabfold/output/popeve/")
-    s3_cp_file(f"./{dest_name}_aln_stats.csv", "s3://markslab-private/eve/popeve/data/mappings/")
+    s3_cp_file(f"./{dest_name}_aln_stats.csv", "s3://markslab-private/eve/indels/data/mappings/")
