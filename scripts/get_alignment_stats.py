@@ -94,6 +94,14 @@ if tier == 6:
     run_names = [
         "missing_invitae_uniref30_2202_colabfold-default_c50",
     ]
+if tier == 7:
+    s3_cp_file("s3://markslab-private/eve/proteingym/data/mappings/clinical_subs_need_weights_2023_10_17_EVE.csv", ".")
+    df = pd.read_csv("clinical_subs_need_weights_2023_10_17_EVE.csv")
+    assert len(df["protein_name"].unique()) == len(df)
+    prio_df = df
+    run_names = [
+        "clinical_subs",
+    ]
 
 os.makedirs("/tmp/aln_stats", exist_ok=True)
 
