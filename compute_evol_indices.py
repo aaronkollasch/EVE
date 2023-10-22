@@ -17,6 +17,8 @@ if __name__=='__main__':
     parser.add_argument('--protein_index', type=int, help='Row index of protein in input mapping file')
     parser.add_argument('--MSA_weights_location', type=str, help='Location where weights for each sequence in the MSA will be stored')
     parser.add_argument('--theta_reweighting', type=float, help='Parameters for MSA sequence re-weighting')
+    parser.add_argument('--force_load_weights', action='store_true',
+        help="Force loading of weights from MSA_weights_location (useful if you want to make sure you're using precalculated weights). Will fail if weight file doesn't exist.")
     parser.add_argument('--no_filter_columns', action='store_true', help='Do not filter columns by gap fraction')
     parser.add_argument('--VAE_checkpoint_location', type=str, help='Location where VAE model checkpoints will be stored')
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name is the protein name followed by this suffix')
@@ -46,11 +48,24 @@ if __name__=='__main__':
             theta = 0.2
     print("Theta MSA re-weighting: "+str(theta))
 
+    if "weights_location" in mapping_file.columns:
+            weights_location = args.MSA_weights_location + os.sep + mapping_file["weights_location"][args.protein_index]
+            print("Using weights filename from mapping file")
+    else:
+        weights_location = args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy'
+    print("Weights file: "+str(weights_location))
+
+    if args.force_load_weights:
+        print("Flag force_load_weights enabled - Forcing that we use weights from file:", weights_location)
+        if not os.path.isfile(weights_location):
+            raise FileNotFoundError(f"Weights file {weights_location} doesn't exist."
+                                    f"To recompute weights, remove the flag --force_load_weights.")
+
     data = data_utils.MSA_processing(
             MSA_location=msa_location,
             theta=theta,
             use_weights=True,
-            weights_location=args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy',
+            weights_location=weights_location,
             threshold_focus_cols_frac_gaps=1.0 if args.no_filter_columns else 0.3,
     )
     
