@@ -164,7 +164,12 @@ class MSA_processing:
 
         # Connect local sequence index with uniprot index (index shift inferred from 1st row of MSA)
         focus_loc = self.focus_seq_name.split("/")[-1]
-        if "-" in focus_loc:
+        if (
+            "-" in focus_loc
+            and len(focus_loc.split("-")) == 2
+            and focus_loc.split("-")[0].isdigit()
+            and focus_loc.split("-")[1].isdigit()
+        ):
             start,stop = focus_loc.split("-")
         else:
             start,stop = 1, len(self.focus_seq)
