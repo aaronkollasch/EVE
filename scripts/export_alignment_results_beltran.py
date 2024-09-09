@@ -44,7 +44,7 @@ def s3_cp_file(from_path, to_path, silent=False):
         raise error
 
 
-tier = 5
+tier = 3
 
 if tier == 1:
     project_name = "popeve"
@@ -97,15 +97,15 @@ if tier == 5:
     ]
 
 def make_a2ms(run_name, project_name, tup):
-    i, j, protein = tup
-    # if subprocess.run(["aws", "s3api", "head-object", "--bucket", "markslab-private", "--key", f"eve/{project_name}/data/MSA/{run_name}/{protein}.a2m"], capture_output=True).returncode != 0:
+    i, protein = tup
+    # if subprocess.run(["aws", "s3api", "head-object", "--bucket", "markslab-private", "--key", f"eve/{project_name}/data/{run_name}/{protein}.a2m"], capture_output=True).returncode != 0:
     # download a3m
     max_runs = 3
     run = 0
     error = Exception()
     while run < max_runs:
         try:
-            subprocess.run(["aws", "s3", "cp", f"s3://markslab-us-east-2/colabfold/output/{project_name}/MSA/{run_name}_pt{i}/{j}.a3m", f"/tmp/{run_name}/{protein}.a3m"], check=True)
+            subprocess.run(["aws", "s3", "cp", f"s3://markslab-us-east-2/colabfold/output/{project_name}/{run_name}/{i}.a3m", f"/tmp/{run_name}/{protein}.a3m"], check=True)
         except subprocess.CalledProcessError as e:
             error = e
             continue
@@ -138,14 +138,8 @@ for run_name in run_names:
     os.makedirs(f"/tmp/{run_name}", exist_ok=True)
 
     def get_run_files():
-        S = 200
-        N = int(len(prio_df)/S)
-        frames = [prio_df.iloc[i*S:(i+1)*S].copy() for i in range(N+1)]
-        for i, frame in enumerate(frames):
-            # if i not in [0, 1, 2, 3, 4, 5, 6, 7, 8]:
-            #     continue
-            for j, row in enumerate(frame.itertuples()):
-                yield i, j, row.protein
+        for i, row in enumerate(prio_df.itertuples()):
+            yield i, row.protein
 
     p = pool.Pool(len(os.sched_getaffinity(0)) * 2)
     i = tqdm(
@@ -162,5 +156,5 @@ for run_name in run_names:
     mapping_df["theta"] = 0.2
     mapping_df.to_csv(f"./{run_name}_mapping.csv", index=False)
     if not s3_path_exists("markslab-private", f"eve/{project_name}/data/mappings/{run_name}_mapping.csv"):
-        subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-us-east-2/colabfold/output/{project_name}/"])
-        subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", "s3://markslab-private/eve/{project_name}/data/mappings/"])
+        subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", f"s3://markslab-us-east-2/colabfold/output/{project_name}/"])
+        subprocess.run(["aws", "s3", "cp", f"./{run_name}_mapping.csv", f"s3://markslab-private/eve/{project_name}/data/mappings/"])
