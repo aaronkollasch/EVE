@@ -210,6 +210,7 @@ class VAE_model(nn.Module):
         N_training =  x_train.shape[0]
         
         start = time.time()
+        last_save = time.time()
         train_loss = 0
         
         for training_step in tqdm.trange(
@@ -244,7 +245,7 @@ class VAE_model(nn.Module):
                     with open(filename, "a") as logs:
                         logs.write(progress+"\n")
 
-            if training_step % training_parameters['save_model_params_freq']==0:
+            if time.time() - last_save > training_parameters['save_model_params_freq']:
                 if 'model_inprogress_checkpoint_location' in training_parameters:
                     old_checkpoints = glob.glob(training_parameters['model_inprogress_checkpoint_location']+os.sep+self.model_name+"_step_*")
                     checkpoint_location = training_parameters['model_inprogress_checkpoint_location']+os.sep+self.model_name+"_step_"+str(training_step)
@@ -261,6 +262,7 @@ class VAE_model(nn.Module):
                 if 'model_inprogress_checkpoint_location' in training_parameters:
                     for checkpoint in old_checkpoints:
                         os.remove(checkpoint)
+                last_save = time.time()
             
             if training_parameters['use_validation_set'] and training_step % training_parameters['validation_freq'] == 0:
                 x_val = torch.tensor(x_val, dtype=self.dtype).to(self.device)

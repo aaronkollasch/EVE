@@ -75,7 +75,7 @@ if __name__=='__main__':
     model_params = json.load(open(args.model_parameters_location))
 
     if args.save_inprogress:
-        model_params["training_parameters"]["save_model_params_freq"] = model_params["training_parameters"]["num_training_steps"] // 100
+        model_params["training_parameters"]["save_model_params_freq"] = 180  # save every 3 minutes
         model_params["training_parameters"]["model_inprogress_checkpoint_location"] = "_inprogress"
         os.makedirs(model_params["training_parameters"]["model_inprogress_checkpoint_location"], exist_ok=True)
         if aws_util is not None:
