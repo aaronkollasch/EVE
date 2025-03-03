@@ -67,6 +67,7 @@ if __name__=='__main__':
             use_weights=True,
             weights_location=weights_location,
             threshold_focus_cols_frac_gaps=1.0 if args.no_filter_columns else 0.3,
+            num_cpus=os.cpu_count(),
     )
 
     model_name = protein_name + "_" + args.model_name_suffix
