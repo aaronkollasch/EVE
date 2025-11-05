@@ -11,6 +11,8 @@ import torch.optim as optim
 from EVE import VAE_model
 from utils import data_utils, aws_utils
 
+DEFAULT_SEED = 42
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='VAE')
     parser.add_argument('--MSA_data_folder', type=str, help='Folder where MSAs are stored')
@@ -25,7 +27,7 @@ if __name__=='__main__':
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name will be the protein name followed by this suffix')
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed')
     parser.add_argument('--save_inprogress', action='store_true', help='Save and restore from in-progress model checkpoints')
     parser.add_argument("--s3-path", type=str, default='', help="Base s3:// path (leave blank to disable syncing).")
     parser.add_argument("--s3-project", type=str, default='default', metavar='P', help="Project name (subfolder of s3-path).")
@@ -45,6 +47,13 @@ if __name__=='__main__':
         except (ValueError, KeyError):
             theta = 0.2
     print("Theta MSA re-weighting: "+str(theta))
+
+    if args.seed is None:
+        if "seed" in mapping_file:
+            args.seed = mapping_file['seed'][args.protein_index]
+        else:
+            args.seed = DEFAULT_SEED
+    print("Random seed:", args.seed)
 
     aws_util = aws_utils.AWSUtility(s3_base_path=args.s3_path, s3_project=args.s3_project) if args.s3_path else None
 
@@ -70,7 +79,10 @@ if __name__=='__main__':
             num_cpus=os.cpu_count(),
     )
 
-    model_name = protein_name + "_" + args.model_name_suffix
+    if args.seed != DEFAULT_SEED:
+        model_name = protein_name + "_rseed_" + str(args.seed) + "_" + args.model_name_suffix
+    else:
+        model_name = protein_name + "_" + args.model_name_suffix
     print("Model name: "+str(model_name))
 
     model_params = json.load(open(args.model_parameters_location))
